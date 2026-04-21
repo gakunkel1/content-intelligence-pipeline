@@ -1,0 +1,43 @@
+version: 2
+
+sources:
+  - name: raw
+    database: db
+    schema: raw
+    tables:
+      - name: products
+        columns:
+          - name: id
+          - name: title
+          - name: description
+          - name: price
+          - name: category
+          - name: image
+          - name: rating
+          - name: ingested_at
+  
+  - name: enriched
+    database: db
+    schema: enriched
+    tables:
+      - name: product_enrichments
+        columns:
+          - name: product_id
+          - name: seo_description
+          - name: brand_consistency_score
+          - name: brand_score_reasoning
+          - name: item_subcategory
+          - name: item_tags
+          - name: target_audience
+          - name: qa_flags
+          - name: enriched_at
+
+      - name: llm_metrics
+        columns:
+          - name: id
+          - name: product_id
+          - name: model
+          - name: input_tokens
+          - name: output_tokens
+          - name: latency_ms
+          - name: enriched_at

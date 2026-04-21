@@ -1,0 +1,66 @@
+services:
+  db:
+    container_name: postgres_container
+    image: postgres:17.9-alpine3.22
+    ports:
+      - 5000:5432
+    environment:
+      POSTGRES_DB: db
+      POSTGRES_USER: db_user
+      POSTGRES_PASSWORD: db_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/airflow_init.sql:/docker-entrypoint-initdb.d/airflow_init.sql
+    networks:
+      - my-network
+
+  af:
+    container_name: airflow_container
+    build: ./airflow
+    image: apache/airflow:3.2.0-python3.12
+    ports:
+      - 8000:8080
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@db:5432/airflow_db
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    depends_on:
+      - db
+    networks:
+      - my-network
+    command: >
+      bash -c "airflow db migrate && airflow standalone"
+    
+  dbt:
+    container_name: dbt_container
+    build: ./dbt
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./dbt:/usr/app
+    environment:
+      DBT_PROFILES_DIR: /usr/app
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      - db
+    networks:
+      - my-network
+    profiles:
+      - transform
+    command: ["run", "--project-dir", "/usr/app/content_intelligence_pipeline"]
+
+networks:
+  my-network:
+    driver: bridge
+
+volumes:
+  pgdata:
