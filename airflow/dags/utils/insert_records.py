@@ -1,6 +1,6 @@
 import psycopg2
 from psycopg2.extras import execute_values
-from datetime import datetime
+from datetime import datetime, UTC
 from pprint import pprint
 import json
 import os
@@ -36,7 +36,7 @@ def create_raw_table(conn):
                 category TEXT,
                 image TEXT,
                 rating JSONB,
-                ingested_at TIMESTAMP DEFAULT NOW()
+                ingested_at TIMESTAMPTZ DEFAULT NOW()
             );
         """)
         conn.commit()
@@ -46,20 +46,33 @@ def create_raw_table(conn):
         raise
     
 def insert_records(conn, data):
+    """
+    Load product data into transient staging table (truncate first).
+    """
     print('Inserting data into raw.products...')
     try:
         # Set ingested_at timestamp and convert rating JSON to string
-        ingested_at = datetime.now()
+        ingested_at = datetime.now(UTC)
         for d in data:
             d['rating'] = json.dumps(d.get('rating', {}))
             d['ingested_at'] = ingested_at
+            
+        # Deduplicate and warn if duplicates are present
+        seen = {}
+        for d in data:
+            if d['id'] in seen:
+                print(f"Warning: duplicate product ID {d['id']} in source data")
+            else:
+                seen[d['id']] = d
+        data = list(seen.values())
                 
-        # Connect and execute INSERT statement
+        # Connect and execute TRUNCATE and INSERT statement
         values = [
             (d['id'], d['title'], d['description'], d['price'],
             d['category'], d['image'], d['rating'], d['ingested_at'])
             for d in data
         ]
+        
         cursor = conn.cursor()
         execute_values(
             cursor,

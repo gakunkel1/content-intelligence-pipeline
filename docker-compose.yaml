@@ -18,6 +18,8 @@ services:
     container_name: airflow_container
     build: ./airflow
     image: apache/airflow:3.2.0-python3.12
+    group_add:
+      - "1001"
     ports:
       - 8000:8080
     environment:
@@ -28,8 +30,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      DBT_PROFILES_DIR: /usr/app
     volumes:
       - ./airflow/dags:/opt/airflow/dags
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - db
     networks:
@@ -40,6 +44,7 @@ services:
   dbt:
     container_name: dbt_container
     build: ./dbt
+    image: content-intelligence-pipeline-dbt
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./dbt:/usr/app

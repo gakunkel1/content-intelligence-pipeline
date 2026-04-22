@@ -3,3 +3,4 @@ apache-airflow-providers-postgres
 requests
 anthropic
 psycopg2-binary
+dbt-postgres

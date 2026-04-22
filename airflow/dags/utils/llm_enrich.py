@@ -2,7 +2,7 @@ import asyncio
 import json
 import anthropic
 from typing import Literal
-from datetime import datetime
+from datetime import datetime, UTC
 from pydantic import BaseModel, Field, computed_field
 from psycopg2.extras import RealDictCursor
 
@@ -15,19 +15,8 @@ class Product(BaseModel):
     price: float
     category: str
     image: str
-    rating: dict
-    ingested_at: datetime
-    
-    @computed_field
-    @property
-    def rating_count(self) -> str:
-        return self.rating.get('count')
-    
-    @computed_field
-    @property
-    def rating_score(self) -> str:
-        return self.rating.get('rate')
-
+    rating_score: float
+    rating_count: int
 
 class LLMOutputSchema(BaseModel):
     seo_description: str = Field(
@@ -102,6 +91,10 @@ def enrich_record(
 ):
     # Initialize Anthropic API client
     client = anthropic.Anthropic()
+
+    # # Simulate error for testing
+    # if product.id < 3:
+    #     raise ValueError("Simulated error for testing")
     
     # Start the clock
     start = datetime.now()
@@ -147,7 +140,7 @@ def enrich_record(
         input_tokens=message.usage.input_tokens,
         output_tokens=message.usage.output_tokens,
         latency_ms=latency_ms,
-        enriched_at=datetime.now()
+        enriched_at=datetime.now(UTC)
     )
     return ProductEnrichment(
         enrichment=enrichment,
@@ -161,7 +154,6 @@ def enrich_data():
         # Create enriched schema if not exists (enriched product descriptions and LLMOps metrics)
         cursor = conn.cursor()
         cursor.execute("""
-            
             CREATE SCHEMA IF NOT EXISTS enriched;
             
             CREATE TABLE IF NOT EXISTS enriched.product_enrichments (
@@ -173,7 +165,7 @@ def enrich_data():
                 item_tags JSONB,
                 target_audience TEXT,
                 qa_flags JSONB,
-                enriched_at TIMESTAMP DEFAULT NOW()
+                enriched_at TIMESTAMPTZ DEFAULT NOW()
             );
             
             CREATE TABLE IF NOT EXISTS enriched.llm_metrics (
@@ -183,18 +175,35 @@ def enrich_data():
                 input_tokens INTEGER,
                 output_tokens INTEGER,
                 latency_ms NUMERIC,
-                enriched_at TIMESTAMP DEFAULT NOW()
+                enriched_at TIMESTAMPTZ DEFAULT NOW(),
+                is_success BOOLEAN DEFAULT TRUE,
+                error_message TEXT
             );
         """)
+        print('Enriched schema and tables created')
 
         # New cursor, retrieve records in small batches
-        write_cur = conn.cursor()    
+        write_cur = conn.cursor()
+        print('Retrieving raw.products records...')
         with conn.cursor('fetch_batched_records', cursor_factory=RealDictCursor) as read_cur:
             read_cur.itersize = 10
+
+            # Retrieve products that need enrichment (new or updated since last enrichment)
             read_cur.execute("""
-                SELECT id, title, description, price, category, image, rating, ingested_at
-                FROM raw.products          
+                SELECT p.id,
+                    p.title,
+                    p.description,
+                    p.price,
+                    p.category,
+                    p.image,
+                    p.rating_score,
+                    p.rating_count
+                FROM snapshots.products p
+                LEFT JOIN enriched.product_enrichments e ON p.id = e.product_id
+                WHERE p.dbt_valid_to IS NULL
+                AND (e.product_id IS NULL OR p.dbt_valid_from > e.enriched_at)
             """)
+        
             for row in read_cur:
                 product = Product(
                     id=row['id'],
@@ -203,11 +212,34 @@ def enrich_data():
                     price=row['price'],
                     category=row['category'],
                     image=row['image'],
-                    rating=row['rating'],
-                    ingested_at=row['ingested_at']
+                    rating_score=row['rating_score'],
+                    rating_count=row['rating_count']
                 )
-                result = enrich_record(product)
+
+                # Enrich product data
+                model = "claude-sonnet-4-6"
+                max_tokens = 2048
+                temperature = 0.5
+                try:
+                    result = enrich_record(product, model, max_tokens, temperature)
+                except Exception as e:
+                    # Record failure in llm_metrics table
+                    write_cur.execute("""
+                        INSERT INTO enriched.llm_metrics
+                            (product_id, model, input_tokens, output_tokens, latency_ms, is_success, error_message)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)                  
+                    """, (
+                        product.id,
+                        model,
+                        0,
+                        0,
+                        0,
+                        False,
+                        str(e)
+                    ))
+                    continue
                 
+                # Parse enrichment results
                 enrichment = result.enrichment
                 metrics = result.metrics
                 
@@ -251,7 +283,9 @@ def enrich_data():
                     metrics.latency_ms
                 ))
                 
+                
         conn.commit()
+        print('Enriched records inserted successfully')
     
     except Exception as e:
         print(f'Failed to enrich records: {e}')
