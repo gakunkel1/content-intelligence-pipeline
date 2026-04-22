@@ -1,0 +1,204 @@
+models:
+  - name: stg_products
+    columns:
+      - name: id
+        data_tests:
+          - not_null
+          - unique
+      - name: title
+        data_tests:
+          - not_null
+      - name: description
+        data_tests:
+          - not_null
+      - name: price
+        data_tests:
+          - not_null
+      - name: category
+        data_tests:
+          - not_null
+      - name: image
+      - name: rating_score
+      - name: rating_count
+      - name: ingested_at
+        data_tests:
+          - not_null
+
+  - name: stg_enrichments
+    columns:
+      - name: product_id
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('product_snapshot')
+                field: id
+      - name: seo_description
+        data_tests:
+          - not_null
+      - name: brand_consistency_score
+        data_tests:
+          - not_null
+      - name: brand_score_reasoning
+        data_tests:
+          - not_null
+      - name: item_subcategory
+        data_tests:
+          - not_null
+      - name: item_tags
+        data_tests:
+          - not_null
+      - name: target_audience
+        data_tests:
+          - not_null
+      - name: qa_flags
+        data_tests:
+          - not_null
+      - name: enriched_at
+        data_tests:
+          - not_null
+
+  - name: stg_metrics
+    columns:
+      - name: id
+        data_tests:
+          - not_null
+          - unique
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: id
+      - name: model
+        data_tests:
+          - not_null
+      - name: input_tokens
+        data_tests:
+          - not_null
+      - name: output_tokens
+        data_tests:
+          - not_null
+      - name: total_tokens
+        data_tests:
+          - not_null
+      - name: latency_ms
+        data_tests:
+          - not_null
+      - name: latency_sec
+        data_tests:
+          - not_null
+      - name: total_tokens_per_sec
+        data_tests:
+          - not_null
+      - name: enriched_at
+        data_tests:
+          - not_null
+      - name: is_success
+        data_tests:
+          - not_null
+      - name: error_message
+
+  - name: product_snapshot
+    columns:
+      - name: id
+        data_tests:
+          - not_null
+          - unique
+      - name: title
+        data_tests:
+          - not_null
+      - name: description
+        data_tests:
+          - not_null
+      - name: price
+        data_tests:
+          - not_null
+      - name: category
+        data_tests:
+          - not_null
+      - name: image
+        data_tests:
+          - not_null
+      - name: rating_score
+        data_tests:
+          - not_null
+      - name: rating_count
+        data_tests:
+          - not_null
+      - name: ingested_at
+        data_tests:
+          - not_null
+
+  - name: content_quality
+    columns:
+      - name: product_id
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('product_snapshot')
+                field: id
+      - name: title
+        data_tests:
+          - not_null
+      - name: brand_consistency_score
+      - name: brand_score_reasoning
+      - name: qa_flags
+
+  - name: product_catalog
+    columns:
+      - name: product_id
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('product_snapshot')
+                field: id
+      - name: title
+        data_tests:
+          - not_null
+      - name: category
+        data_tests:
+          - not_null
+      - name: subcategory
+      - name: price
+        data_tests:
+          - not_null
+      - name: image
+        data_tests:
+          - not_null
+      - name: seo_description
+      - name: rating_score
+        data_tests:
+          - not_null
+      - name: rating_count
+        data_tests:
+          - not_null
+      - name: item_tags
+      - name: target_audience
+
+  - name: model_stats
+    columns:
+      - name: model
+        data_tests:
+          - not_null
+      - name: avg_latency_sec
+        data_tests:
+          - not_null
+      - name: avg_total_tokens_per_sec
+        data_tests:
+          - not_null
+      - name: success_rate
+        data_tests:
+          - not_null
+      - name: success_count
+        data_tests:
+          - not_null
+      - name: failure_count
+        data_tests:
+          - not_null

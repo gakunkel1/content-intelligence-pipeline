@@ -236,7 +236,7 @@ def enrich_data():
                         model,
                         0,
                         0,
-                        None,
+                        0,
                         False,
                         str(e)
                     ))
