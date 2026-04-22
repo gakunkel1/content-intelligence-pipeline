@@ -59,9 +59,9 @@ def run_pipeline():
     )
 
     # Create snapshot of product data
-    dbt_snapshot_products = DockerOperator(
-        task_id="dbt_snapshot_products",
-        command="snapshot --select products --project-dir /usr/app/content_intelligence_pipeline",
+    dbt_product_snapshot = DockerOperator(
+        task_id="dbt_product_snapshot",
+        command="snapshot --select product_snapshot --project-dir /usr/app/content_intelligence_pipeline",
         **DBT_DOCKER_DEFAULTS,
     )
         
@@ -72,17 +72,17 @@ def run_pipeline():
         """
         enrich_data()
 
-    # dbt_stg_mart = DockerOperator(
-    #     task_id="dbt_stg_mart",
-    #     command="run --select stg_mart --project-dir /usr/app/content_intelligence_pipeline",
-    #     **DBT_DOCKER_DEFAULTS,
-    # )
+    dbt_stg_analytics = DockerOperator(
+        task_id="dbt_stg_analytics",
+        command="run --select tag:stg_analytics --project-dir /usr/app/content_intelligence_pipeline",
+        **DBT_DOCKER_DEFAULTS,
+    )
         
-    # dbt_run = DockerOperator(
-    #     task_id="dbt_run",
-    #     command="run --project-dir /usr/app/content_intelligence_pipeline",
-    #     **DBT_DOCKER_DEFAULTS,
-    # )
+    dbt_analytics = DockerOperator(
+        task_id="dbt_analytics",
+        command="run --select tag:analytics --project-dir /usr/app/content_intelligence_pipeline",
+        **DBT_DOCKER_DEFAULTS,
+    )
 
     dbt_test = DockerOperator(
         task_id="dbt_test",
@@ -90,7 +90,6 @@ def run_pipeline():
         **DBT_DOCKER_DEFAULTS,
     )
     
-    # ingest() >> enrich() >> dbt_run >> dbt_test
-    ingest() >> dbt_stg_products >> dbt_snapshot_products >> enrich() >> dbt_test
+    ingest() >> dbt_stg_products >> dbt_product_snapshot >> enrich() >> dbt_stg_analytics >> dbt_analytics >> dbt_test
     
 run_pipeline()

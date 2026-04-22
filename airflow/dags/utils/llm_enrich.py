@@ -1,10 +1,11 @@
-import asyncio
 import json
+import os
 import anthropic
 from typing import Literal
 from datetime import datetime, UTC
 from pydantic import BaseModel, Field, computed_field
 from psycopg2.extras import RealDictCursor
+import random
 
 from utils.insert_records import connect_to_db
 
@@ -92,9 +93,10 @@ def enrich_record(
     # Initialize Anthropic API client
     client = anthropic.Anthropic()
 
-    # # Simulate error for testing
-    # if product.id < 3:
-    #     raise ValueError("Simulated error for testing")
+    # Simulate error for testing
+    if random.random() < 0.15 and os.environ['SIMULATE_ENRICHMENT_ERROR'] == 'TRUE':
+        print(f"Simulated enrichment error for product {product.id}")
+        raise ValueError("Simulated enrichment error for testing purposes")
     
     # Start the clock
     start = datetime.now()
@@ -149,6 +151,7 @@ def enrich_record(
 
 def enrich_data():
     try:
+        # Connect to the database
         conn = connect_to_db()
         
         # Create enriched schema if not exists (enriched product descriptions and LLMOps metrics)
@@ -198,7 +201,7 @@ def enrich_data():
                     p.image,
                     p.rating_score,
                     p.rating_count
-                FROM snapshots.products p
+                FROM snapshots.product_snapshot p
                 LEFT JOIN enriched.product_enrichments e ON p.id = e.product_id
                 WHERE p.dbt_valid_to IS NULL
                 AND (e.product_id IS NULL OR p.dbt_valid_from > e.enriched_at)
@@ -233,7 +236,7 @@ def enrich_data():
                         model,
                         0,
                         0,
-                        0,
+                        None,
                         False,
                         str(e)
                     ))

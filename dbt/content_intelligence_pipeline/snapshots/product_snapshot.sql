@@ -1,11 +1,11 @@
-{% snapshot products %}
+{% snapshot product_snapshot %}
 
 {{
     config(
         target_schema='snapshots',
         unique_key='id',
         strategy='check',
-        tags=['products', 'snapshots'],
+        tags=['product_snapshot'],
         check_cols=['title', 'description', 'price', 'category', 'image', 'rating_score', 'rating_count']
     )
 }}

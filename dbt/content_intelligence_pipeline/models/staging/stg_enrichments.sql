@@ -1,7 +1,7 @@
 {{
     config(
         materialized='view',
-        tags=['products', 'product_enrichments', 'staging'],
+        tags=['stg_analytics'],
         schema='staging'
     )
 }}
