@@ -8,7 +8,7 @@ from docker.types import Mount
 
 from utils.insert_records import ingest_data
 from utils.llm_enrich import enrich_data
-
+from utils.asset_generation import generate_assets_for_tickets
 DBT_ENV = {
     "DBT_PROFILES_DIR": "/usr/app",
     "DB_HOST": "postgres_container",
@@ -89,7 +89,20 @@ def run_pipeline():
         command="test --project-dir /usr/app/content_intelligence_pipeline",
         **DBT_DOCKER_DEFAULTS,
     )
+
+    dbt_seed_tickets = DockerOperator(
+        task_id="dbt_seed_tickets",
+        command="seed --select tickets --full-refresh --project-dir /usr/app/content_intelligence_pipeline",
+        **DBT_DOCKER_DEFAULTS,
+    )
+
+    @task
+    def generate_assets():
+        """
+        Generate assets for the tickets.
+        """
+        generate_assets_for_tickets()
     
-    ingest() >> dbt_stg_products >> dbt_product_snapshot >> enrich() >> dbt_stg_analytics >> dbt_analytics >> dbt_test
+    dbt_seed_tickets >> ingest() >> dbt_stg_products >> dbt_product_snapshot >> enrich() >> dbt_stg_analytics >> dbt_analytics >> dbt_test >> generate_assets()
     
 run_pipeline()

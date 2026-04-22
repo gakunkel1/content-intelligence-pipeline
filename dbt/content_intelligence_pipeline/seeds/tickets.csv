@@ -1,0 +1,7 @@
+id,product_id,task,priority,completed
+1,2,create_landing_page,high,0
+2,7,create_landing_page,high,0
+3,2,create_email_campaign,medium,0
+4,5,generate_alt_text,low,0
+5,7,generate_meta_tags,medium,0
+6,3,brand_review,high,0
