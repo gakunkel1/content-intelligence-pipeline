@@ -8,7 +8,7 @@ from docker.types import Mount
 
 from utils.insert_records import ingest_data
 from utils.llm_enrich import enrich_data
-from utils.asset_generation import generate_assets_for_tickets
+
 DBT_ENV = {
     "DBT_PROFILES_DIR": "/usr/app",
     "DB_HOST": "postgres_container",
@@ -35,17 +35,18 @@ DBT_DOCKER_DEFAULTS = {
 }
 
 @dag(
-    schedule=None,
+    schedule="0 6 * * *",
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
     catchup=False,
     tags=["content-intelligence-pipeline"],
+    max_active_runs=1,
 )
 def run_pipeline():
     """
     Run full data pipeline.
     """
     @task
-    def ingest():
+    def ingest_products():
         """
         Retrieve product data from API and load it into PostgreSQL.
         """
@@ -66,20 +67,20 @@ def run_pipeline():
     )
         
     @task
-    def enrich():
+    def enrich_products():
         """
         Use LLM to enrich the product data with marketing copy.
         """
         enrich_data()
 
-    dbt_stg_analytics = DockerOperator(
-        task_id="dbt_stg_analytics",
+    dbt_stg_analytics_models = DockerOperator(
+        task_id="dbt_stg_analytics_models",
         command="run --select tag:stg_analytics --project-dir /usr/app/content_intelligence_pipeline",
         **DBT_DOCKER_DEFAULTS,
     )
         
-    dbt_analytics = DockerOperator(
-        task_id="dbt_analytics",
+    dbt_analytics_models = DockerOperator(
+        task_id="dbt_analytics_models",
         command="run --select tag:analytics --project-dir /usr/app/content_intelligence_pipeline",
         **DBT_DOCKER_DEFAULTS,
     )
@@ -89,20 +90,7 @@ def run_pipeline():
         command="test --project-dir /usr/app/content_intelligence_pipeline",
         **DBT_DOCKER_DEFAULTS,
     )
-
-    dbt_seed_tickets = DockerOperator(
-        task_id="dbt_seed_tickets",
-        command="seed --select tickets --full-refresh --project-dir /usr/app/content_intelligence_pipeline",
-        **DBT_DOCKER_DEFAULTS,
-    )
-
-    @task
-    def generate_assets():
-        """
-        Generate assets for the tickets.
-        """
-        generate_assets_for_tickets()
     
-    dbt_seed_tickets >> ingest() >> dbt_stg_products >> dbt_product_snapshot >> enrich() >> dbt_stg_analytics >> dbt_analytics >> dbt_test >> generate_assets()
+    ingest_products() >> dbt_stg_products >> dbt_product_snapshot >> enrich_products() >> dbt_stg_analytics_models >> dbt_analytics_models >> dbt_test
     
 run_pipeline()

@@ -47,8 +47,6 @@ services:
     build: ./dbt
     image: content-intelligence-pipeline-dbt
     user: "${UID:-1000}:${GID:-1000}"
-    volumes:
-      - ./dbt:/usr/app
     environment:
       DBT_PROFILES_DIR: /usr/app
       DB_HOST: ${DB_HOST}
@@ -63,6 +61,24 @@ services:
     profiles:
       - transform
     command: ["run", "--project-dir", "/usr/app/content_intelligence_pipeline"]
+
+  streamlit:
+    container_name: streamlit_container
+    build: ./streamlit
+    volumes:
+      - ./streamlit:/usr/app
+    ports:
+      - 8501:8501
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      - db
+    networks:
+      - my-network
 
 networks:
   my-network:

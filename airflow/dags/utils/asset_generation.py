@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, computed_field
 from psycopg2.extras import RealDictCursor
 import random
 
-from utils.insert_records import connect_to_db
+from utils.db_connect import connect_to_db
 
 class Ticket(BaseModel):
     id: int
@@ -322,7 +322,7 @@ def generate_assets_for_tickets():
                     pc.target_audience as product_target_audience
                 FROM raw.tickets t
                 INNER JOIN analytics.product_catalog pc ON t.product_id = pc.product_id
-                WHERE completed = 0
+                WHERE t.completed = FALSE
                 AND EXISTS (
                     SELECT 1
                     FROM enriched.product_enrichments e
@@ -351,6 +351,12 @@ def generate_assets_for_tickets():
                     product_item_tags=row['product_item_tags'],
                     product_target_audience=row['product_target_audience'],
                 )
+
+                write_cur.execute("""
+                UPDATE raw.tickets
+                SET status = 'In Progress'
+                WHERE id = %s
+                """, (ticket.id,))
 
                 model = "claude-sonnet-4-6"
                 max_tokens = 16384
@@ -383,7 +389,7 @@ def generate_assets_for_tickets():
                 # Update ticket status
                 write_cur.execute("""
                 UPDATE raw.tickets
-                SET completed = 1
+                SET completed = TRUE, status = 'Done'
                 WHERE id = %s
                 """, (generated_content.ticket_id,))
 

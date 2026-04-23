@@ -6,21 +6,7 @@ import json
 import os
 
 from utils.api_request import get_products
-
-def connect_to_db():
-    print('Connecting to PostgreSQL')
-    try:
-        conn = psycopg2.connect(
-            host=os.environ['DB_HOST'],
-            port=os.environ['DB_PORT'],
-            dbname=os.environ['DB_NAME'],
-            user=os.environ['DB_USER'],
-            password=os.environ['DB_PASSWORD'],
-        )
-        return conn
-    except psycopg2.Error as e:
-        print(f'Database connection failed: {e}')
-        raise
+from utils.db_connect import connect_to_db
     
 def create_raw_table(conn):
     print('Ensuring table exists...')
@@ -70,7 +56,7 @@ def insert_records(conn, data):
         values = [
             (d['id'], d['title'], d['description'], d['price'],
             d['category'], d['image'], d['rating'], d['ingested_at'])
-            for d in data
+            for d in data[:5]
         ]
         
         cursor = conn.cursor()

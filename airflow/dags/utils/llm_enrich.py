@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, computed_field
 from psycopg2.extras import RealDictCursor
 import random
 
-from utils.insert_records import connect_to_db
+from utils.db_connect import connect_to_db
 
 class Product(BaseModel):
     id: int
