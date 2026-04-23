@@ -56,7 +56,7 @@ def insert_records(conn, data):
         values = [
             (d['id'], d['title'], d['description'], d['price'],
             d['category'], d['image'], d['rating'], d['ingested_at'])
-            for d in data[:5]
+            for d in data
         ]
         
         cursor = conn.cursor()
