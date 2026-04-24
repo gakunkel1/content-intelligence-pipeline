@@ -32,6 +32,7 @@ services:
       SIMULATE_ENRICHMENT_ERROR: ${SIMULATE_ENRICHMENT_ERROR}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       DBT_PROFILES_DIR: /usr/app
+      HOST_PROJECT_PATH: ${PWD}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - /var/run/docker.sock:/var/run/docker.sock
@@ -56,10 +57,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
     depends_on:
       - db
-    networks:
-      - my-network
     profiles:
       - transform
+    networks:
+      - my-network
     command: ["run", "--project-dir", "/usr/app/content_intelligence_pipeline"]
 
   streamlit:

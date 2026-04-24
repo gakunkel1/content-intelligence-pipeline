@@ -29,7 +29,7 @@ DBT_DOCKER_DEFAULTS = {
     "mounts": [
         Mount(
             target="/usr/app",
-            source="/home/gabri/content-intelligence-pipeline/dbt",
+            source=f"{os.environ['HOST_PROJECT_PATH']}/dbt",
             type="bind"
         )
     ]
