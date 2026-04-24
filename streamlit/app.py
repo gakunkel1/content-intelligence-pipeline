@@ -41,8 +41,8 @@ def asset_subheader(task_type, product_title, ticket_id):
 st.set_page_config(page_title="Content Intelligence Pipeline", layout="wide")
 st.title("Content Intelligence Pipeline")
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "Submit Ticket", "Tickets", "Product Catalog", "Generated Assets"
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "Submit Ticket", "Tickets", "Product Catalog", "Generated Assets", "LLMOps"
 ])
 
 # Submit Ticket
@@ -104,7 +104,82 @@ with tab2:
 with tab3:
     st.subheader("Enriched Product Catalog")
     catalog = query_df("SELECT * FROM analytics.product_catalog LIMIT 50")
-    st.dataframe(catalog, use_container_width=True)
+    st.dataframe(catalog, use_container_width=True, hide_index=True)
+
+    @st.dialog("Product Comparison", width="large")
+    def show_comparison(product_id):
+        conn = connect_to_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Original
+        cur.execute("""
+            SELECT id, title, description, price, category, image, rating, ingested_at
+            FROM raw.products
+            WHERE id = %s
+        """, (product_id,))
+        original = cur.fetchone()
+
+        # Enriched
+        cur.execute("""
+            SELECT seo_description, brand_consistency_score, brand_score_reasoning,
+                   item_subcategory, item_tags, target_audience, qa_flags, enriched_at
+            FROM enriched.product_enrichments
+            WHERE product_id = %s
+        """, (product_id,))
+        enriched = cur.fetchone()
+        conn.close()
+
+        if not original:
+            st.error("Product not found.")
+            return
+
+        # Two columns side by side
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Original Listing")
+            st.image(original["image"], width=200)
+            st.markdown(f"**{original['title']}**")
+            st.markdown(f"**Price:** ${original['price']:.2f}")
+            st.markdown(f"**Category:** {original['category']}")
+            st.markdown(f"**Description:**")
+            st.text(original["description"])
+            rating = json.loads(original["rating"]) if isinstance(original["rating"], str) else original["rating"]
+            st.markdown(f"**Rating:** {rating.get('rate', 'N/A')}/5 ({rating.get('count', 0)} reviews)")
+
+        with col2:
+            st.subheader("Enriched Data")
+            if enriched:
+                st.markdown(f"**SEO Description:**")
+                st.text(enriched["seo_description"])
+                st.markdown(f"**Brand Score:** {enriched['brand_consistency_score']}/100")
+                st.caption(enriched["brand_score_reasoning"])
+                st.markdown(f"**Subcategory:** {enriched['item_subcategory']}")
+                st.markdown(f"**Target Audience:** {enriched['target_audience']}")
+
+                tags = enriched["item_tags"] if isinstance(enriched["item_tags"], list) else json.loads(enriched["item_tags"])
+                st.markdown(f"**Tags:** {', '.join(tags)}")
+
+                flags = enriched["qa_flags"] if isinstance(enriched["qa_flags"], list) else json.loads(enriched["qa_flags"])
+                if flags:
+                    st.warning(f"**QA Flags:** {', '.join(flags)}")
+                else:
+                    st.success("No QA issues found")
+
+                st.caption(f"Enriched at: {enriched['enriched_at']}")
+            else:
+                st.info("Not yet enriched.")
+
+    # Product selector + button
+    selected_product = st.selectbox(
+        "Select a product to compare",
+        options=catalog["product_id"].tolist(),
+        format_func=lambda x: catalog[catalog["product_id"] == x]["title"].values[0],
+        key="product_compare",
+    )
+
+    if st.button("View Original vs Enriched"):
+        show_comparison(selected_product)
     
 # Generated Assets
 with tab4:
@@ -173,3 +248,26 @@ with tab4:
 
             else:
                 st.code(row["content"])
+ 
+# LLMOps
+with tab5:
+    st.subheader("LLMOps")
+    model_stats = query_df("""
+        SELECT model,
+            avg_latency_sec,
+            avg_total_tokens_per_sec,
+            success_rate,
+            success_count,
+            failure_count
+        FROM analytics.model_stats;
+    """)
+    st.dataframe(model_stats, use_container_width=True)
+    
+    st.subheader("Enrichment Errors")
+    enrichment_errors = query_df("""
+        SELECT id, product_id, model, enriched_at, error_message
+        FROM enriched.llm_metrics
+        WHERE is_success = false
+        ORDER BY enriched_at DESC                        
+    """)
+    st.dataframe(enrichment_errors, use_container_width=True)
