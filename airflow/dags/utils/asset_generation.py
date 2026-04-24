@@ -215,6 +215,12 @@ def build_user_message(ticket: Ticket) -> str:
     Product Item Tags: {ticket.product_item_tags}
     Product Target Audience: {ticket.product_target_audience}
     """
+    
+def table_exists(schema_name: str, table_name: str) -> bool:
+    conn = connect_to_db()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(f"SELECT to_regclass('{schema_name}.{table_name}') IS NOT NULL AS check;")
+    return cur.fetchone()['check']
 
 def generate_content_for_ticket(
     ticket: Ticket,
@@ -301,97 +307,99 @@ def generate_assets_for_tickets():
         """)
 
         print('Assets schema and tables created')
+        
+        if table_exists('assets', 'tickets') and table_exists('analytics', 'product_catalog'):
 
-        write_cur = conn.cursor()
-        print('Retrieving tickets...')
-        with conn.cursor('fetch_tickets', cursor_factory=RealDictCursor) as read_cur:
-            read_cur.execute("""
-                SELECT t.id as ticket_id,
-                    t.product_id,
-                    t.task,
-                    t.priority,
-                    pc.title as product_title,
-                    pc.category as product_category,
-                    pc.subcategory as product_subcategory,
-                    pc.price as product_price,
-                    pc.image as product_image,
-                    pc.seo_description as product_seo_description,
-                    pc.rating_score as product_rating_score,
-                    pc.rating_count as product_rating_count,
-                    pc.item_tags as product_item_tags,
-                    pc.target_audience as product_target_audience
-                FROM raw.tickets t
-                INNER JOIN analytics.product_catalog pc ON t.product_id = pc.product_id
-                WHERE t.completed = FALSE
-                AND EXISTS (
-                    SELECT 1
-                    FROM enriched.product_enrichments e
-                    WHERE e.product_id = pc.product_id
-                )
-                ORDER BY CASE WHEN priority = 'high' THEN 1
-                            WHEN priority = 'medium' THEN 2
-                            ELSE 3 END,
-                    id
-            """)
+            write_cur = conn.cursor()
+            print('Retrieving tickets...')
+            with conn.cursor('fetch_tickets', cursor_factory=RealDictCursor) as read_cur:
+                read_cur.execute("""
+                    SELECT t.id as ticket_id,
+                        t.product_id,
+                        t.task,
+                        t.priority,
+                        pc.title as product_title,
+                        pc.category as product_category,
+                        pc.subcategory as product_subcategory,
+                        pc.price as product_price,
+                        pc.image as product_image,
+                        pc.seo_description as product_seo_description,
+                        pc.rating_score as product_rating_score,
+                        pc.rating_count as product_rating_count,
+                        pc.item_tags as product_item_tags,
+                        pc.target_audience as product_target_audience
+                    FROM assets.tickets t
+                    INNER JOIN analytics.product_catalog pc ON t.product_id = pc.product_id
+                    WHERE t.completed = FALSE
+                    AND EXISTS (
+                        SELECT 1
+                        FROM enriched.product_enrichments e
+                        WHERE e.product_id = pc.product_id
+                    )
+                    ORDER BY CASE WHEN priority = 'high' THEN 1
+                                WHEN priority = 'medium' THEN 2
+                                ELSE 3 END,
+                        id
+                """)
 
-            for row in read_cur:
-                ticket = Ticket(
-                    id=row['ticket_id'],
-                    product_id=row['product_id'],
-                    task=row['task'],
-                    priority=row['priority'],
-                    product_title=row['product_title'],
-                    product_category=row['product_category'],
-                    product_subcategory=row['product_subcategory'],
-                    product_price=row['product_price'],
-                    product_image=row['product_image'],
-                    product_seo_description=row['product_seo_description'],
-                    product_rating_score=row['product_rating_score'],
-                    product_rating_count=row['product_rating_count'],
-                    product_item_tags=row['product_item_tags'],
-                    product_target_audience=row['product_target_audience'],
-                )
+                for row in read_cur:
+                    ticket = Ticket(
+                        id=row['ticket_id'],
+                        product_id=row['product_id'],
+                        task=row['task'],
+                        priority=row['priority'],
+                        product_title=row['product_title'],
+                        product_category=row['product_category'],
+                        product_subcategory=row['product_subcategory'],
+                        product_price=row['product_price'],
+                        product_image=row['product_image'],
+                        product_seo_description=row['product_seo_description'],
+                        product_rating_score=row['product_rating_score'],
+                        product_rating_count=row['product_rating_count'],
+                        product_item_tags=row['product_item_tags'],
+                        product_target_audience=row['product_target_audience'],
+                    )
 
-                write_cur.execute("""
-                UPDATE raw.tickets
-                SET status = 'In Progress'
-                WHERE id = %s
-                """, (ticket.id,))
+                    write_cur.execute("""
+                    UPDATE assets.tickets
+                    SET status = 'In Progress'
+                    WHERE id = %s
+                    """, (ticket.id,))
 
-                model = "claude-sonnet-4-6"
-                max_tokens = 16384
-                temperature = 0.5
-                try:
-                    generated_content = generate_content_for_ticket(ticket, model, max_tokens, temperature)
-                except Exception as e:
-                    # Record failure to generate content
-                    print(f"Failed to generate content for ticket {ticket.id}: {e}")
-                    continue
+                    model = "claude-sonnet-4-6"
+                    max_tokens = 16384
+                    temperature = 0.5
+                    try:
+                        generated_content = generate_content_for_ticket(ticket, model, max_tokens, temperature)
+                    except Exception as e:
+                        # Record failure to generate content
+                        print(f"Failed to generate content for ticket {ticket.id}: {e}")
+                        continue
 
-                # Record the generated content
-                write_cur.execute("""
-                INSERT INTO assets.generated_content
-                    (ticket_id, product_id, task_type, content, content_format,
-                     model, input_tokens, output_tokens, latency_ms, generated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                """, (
-                    generated_content.ticket_id,
-                    generated_content.product_id,
-                    generated_content.task_type,
-                    generated_content.content,
-                    generated_content.content_format,
-                    generated_content.model,
-                    generated_content.input_tokens,
-                    generated_content.output_tokens,
-                    generated_content.latency_ms,
-                ))
+                    # Record the generated content
+                    write_cur.execute("""
+                    INSERT INTO assets.generated_content
+                        (ticket_id, product_id, task_type, content, content_format,
+                        model, input_tokens, output_tokens, latency_ms, generated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    """, (
+                        generated_content.ticket_id,
+                        generated_content.product_id,
+                        generated_content.task_type,
+                        generated_content.content,
+                        generated_content.content_format,
+                        generated_content.model,
+                        generated_content.input_tokens,
+                        generated_content.output_tokens,
+                        generated_content.latency_ms,
+                    ))
 
-                # Update ticket status
-                write_cur.execute("""
-                UPDATE raw.tickets
-                SET completed = TRUE, status = 'Done'
-                WHERE id = %s
-                """, (generated_content.ticket_id,))
+                    # Update ticket status
+                    write_cur.execute("""
+                    UPDATE assets.tickets
+                    SET completed = TRUE, status = 'Done'
+                    WHERE id = %s
+                    """, (generated_content.ticket_id,))
 
         conn.commit()
         print('Generated content inserted successfully')

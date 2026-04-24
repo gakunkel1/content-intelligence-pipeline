@@ -94,9 +94,9 @@ def enrich_record(
     client = anthropic.Anthropic()
 
     # Simulate error for testing
-    if random.random() < 0.15 and os.environ['SIMULATE_ENRICHMENT_ERROR'] == 'TRUE':
+    if random.random() < 0.15 and str(os.environ['SIMULATE_ENRICHMENT_ERROR']).upper() == 'TRUE':
         print(f"Simulated enrichment error for product {product.id}")
-        raise ValueError("Simulated enrichment error for testing purposes")
+        raise ValueError("Simulated enrichment error for testing purposes (SIMULATE_ENRICHMENT_ERROR=TRUE)")
     
     # Start the clock
     start = datetime.now()

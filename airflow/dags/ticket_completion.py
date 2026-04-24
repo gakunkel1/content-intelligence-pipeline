@@ -49,8 +49,8 @@ def complete_tickets():
         conn = connect_to_db()
         cur = conn.cursor()
         cur.execute("""
-            CREATE SCHEMA IF NOT EXISTS raw;
-            CREATE TABLE IF NOT EXISTS raw.tickets
+            CREATE SCHEMA IF NOT EXISTS assets;
+            CREATE TABLE IF NOT EXISTS assets.tickets
             (
                 id INT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
                 product_id integer,
