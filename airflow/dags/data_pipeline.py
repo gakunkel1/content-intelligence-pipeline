@@ -20,6 +20,7 @@ DBT_ENV = {
 
 DBT_DOCKER_DEFAULTS = {
     "image": "content-intelligence-pipeline-dbt",
+    "force_pull": False,
     "network_mode": "content-intelligence-pipeline_my-network",
     "mount_tmp_dir": False,
     "auto_remove": "success",
